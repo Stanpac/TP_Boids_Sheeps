@@ -50,3 +50,11 @@ The following packages were added:
   com.unity.timeline@1.6.4
   com.unity.ugui@1.0.0
   com.unity.xr.legacyinputhelpers@2.1.9
+
+=== Fri Feb  9 14:27:35 2024
+
+Packages were changed.
+Update Mode: updateDependencies
+
+The following packages were updated:
+  com.unity.xr.legacyinputhelpers from version 2.1.9 to 2.1.10

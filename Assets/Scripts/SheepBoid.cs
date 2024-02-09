@@ -1,5 +1,7 @@
-﻿using System.Collections;
+﻿using System;
+using System.Collections;
 using System.Collections.Generic;
+using System.ComponentModel;
 using UnityEngine;
 
 /// <summary>
@@ -18,10 +20,34 @@ public class SheepBoid : MonoBehaviour
     Vector3 velocity;
 
     Transform predator;
-
+    
+    // Rule Weights
+    private float _weightCohesionBase;
+    private float _weightCohesionFear;
+    private float _weightSeparationBase;
+    private float _weightSeparationFear;
+    private float _weightAlignmentBase;
+    private float _weightAlignmentFear;
+    private float _weightEscape;
+    private float _weightEnclosed;
+    
+    // Radius
+    [SerializeField] private float _FlightZoneRadus = 7f;
+    [SerializeField] private float _alignementZoneRadius  = 3f;
+    
+    // Debug
+    [SerializeField, Header("Debug")] private float _Raylenght = 5f;
     void Start()
     {
         predator = GameObject.FindGameObjectWithTag("Predator").transform;
+        _weightCohesionBase = SheepHerd.Instance._weightCohesionBase;
+        _weightCohesionFear = SheepHerd.Instance._weightCohesionFear;
+        _weightSeparationBase = SheepHerd.Instance._weightSeparationBase;
+        _weightSeparationFear = SheepHerd.Instance._weightSeparationFear;
+        _weightAlignmentBase = SheepHerd.Instance._weightAlignmentBase;
+        _weightAlignmentFear = SheepHerd.Instance._weightAlignmentFear;
+        _weightEscape = SheepHerd.Instance._weightEscape;
+        _weightEnclosed = SheepHerd.Instance._weightEnclosed;   
     }
 
     /// <summary>
@@ -32,7 +58,7 @@ public class SheepBoid : MonoBehaviour
     /// <returns>Weight of the rule</returns>
     float P(float x)
     {
-        return 0;
+        return  1 / Mathf.PI * Mathf.Atan((_FlightZoneRadus - x)/ 0.3f ) + 0.5f;
     }
 
     /// <summary>
@@ -45,7 +71,7 @@ public class SheepBoid : MonoBehaviour
     /// <returns>Combined weights</returns>
     float CombineWeight(float mult1, float mult2, float x)
     {
-        return 0;
+        return mult1 + (1 + P(x) * mult2);
     }
 
     /// <summary>
@@ -58,7 +84,9 @@ public class SheepBoid : MonoBehaviour
     /// <returns></returns>
     float Inv(float x, float s)
     {
-        return 0;
+        float value = x / s + Mathf.Epsilon;
+        
+        return 1 / (value * value);
     }
 
     /// <summary>
@@ -71,7 +99,18 @@ public class SheepBoid : MonoBehaviour
     /// <returns>coh(s) the cohesion vector</returns>
     Vector3 RuleCohesion()
     {
-        return Vector3.zero;
+        Vector3 sheepPos = transform.position;
+        
+        SheepBoid[] sheeps = SheepHerd.Instance.sheeps;
+        Vector3 averagePos = Vector3.zero;
+        foreach (SheepBoid sheep in sheeps) {
+            averagePos += sheep.transform.position;
+        }
+        
+        averagePos /= sheeps.Length;
+        Vector3 direction = (averagePos - sheepPos).normalized;
+        Debug.DrawRay(sheepPos, direction * _Raylenght , Color.green);
+        return direction;
     }
 
     /// <summary>
@@ -87,7 +126,15 @@ public class SheepBoid : MonoBehaviour
     /// <returns>sep(s) the separation vector</returns>
     Vector3 RuleSeparation()
     {
-        return Vector3.zero;
+        Vector3 sp = transform.position;
+        Vector3 sum = Vector3.zero;
+        for (int i = 0; i < SheepHerd.Instance.sheeps.Length; i++) {
+            if (SheepHerd.Instance.sheeps[i] == this) continue;
+            Vector3 sip = SheepHerd.Instance.sheeps[i].transform.position;
+            sum += (sp - sip).normalized * Inv((sp -sip).magnitude, 1);
+        }
+        Debug.DrawRay(sp, sum.normalized *_Raylenght, Color.black);
+        return sum;
     }
 
     /// <summary>
@@ -104,7 +151,15 @@ public class SheepBoid : MonoBehaviour
     /// <returns>ali(s) the alignement vector</returns>
     Vector3 RuleAlignment()
     {
-        return Vector3.zero;
+        Vector3 sp = transform.position;
+        Vector3 sum = Vector3.zero;
+        for (int i = 0; i < SheepHerd.Instance.sheeps.Length; i++)  {
+            Vector3 sip = SheepHerd.Instance.sheeps[i].transform.position;
+            if ((sip - sp).magnitude > _alignementZoneRadius) continue;
+            sum += SheepHerd.Instance.sheeps[i].velocity;
+        }
+        Debug.DrawRay(sp , sum.normalized * _Raylenght, Color.yellow);
+        return sum;
     }
 
     /// <summary>
@@ -118,7 +173,11 @@ public class SheepBoid : MonoBehaviour
     /// <returns>esc(s) the escape vector</returns>
     Vector3 RuleEscape()
     {
-        return Vector3.zero;
+        Vector3 sp = transform.position;
+        Vector3 pp = predator.position;
+        Vector3 direction = (sp - pp).normalized * Inv((sp - pp).magnitude, 2);
+        Debug.DrawRay(sp, direction.normalized * _Raylenght, Color.red);
+        return direction;
     }
 
     /// <summary>
@@ -128,7 +187,13 @@ public class SheepBoid : MonoBehaviour
     /// <returns>The resulting vector of all the rules</returns>
     Vector3 ApplyRules()
     {
-        Vector3 v = Vector3.zero;
+        Vector3 position = transform.position;
+        float x = (position - predator.position).magnitude;
+        Vector3 v = CombineWeight(_weightCohesionBase, _weightCohesionFear, (x)) * RuleCohesion() +
+                   CombineWeight(_weightSeparationBase, _weightSeparationFear, (x)) * RuleSeparation() +
+                   CombineWeight(_weightAlignmentBase, _weightAlignmentFear, (x)) * RuleAlignment() +
+                   _weightEnclosed * Pen.Instance.RuleEnclosed(position) +
+                   _weightEscape * RuleEscape();
         return v;
     }
 
